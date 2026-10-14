@@ -30,47 +30,83 @@ medin/
 │   ├── app/            pages (folders = URLs)
 │   ├── components/     ui/ is the design system; the rest are feature components
 │   ├── hooks/          all data fetching (React Query)
-│   ├── lib/            api() helper, types, formatting
+│   ├── lib/            api() helper, types, formatting, dropdown lists
+│   ├── config/         fonts
 │   └── middleware.ts   sends logged-out visitors to /signin
 └── docker-compose.yml  optional local Postgres
 ```
 
 ## Running it locally
 
-You need Python 3.11+, Node 20+, and PostgreSQL 16 (installed, or via `docker compose up -d`).
+You need **Python 3.11+**, **Node 20+** and **PostgreSQL 16**. For Postgres, either install it (on a Mac: `brew install postgresql@16 && brew services start postgresql@16`) or use Docker (step 2).
 
-**1. Backend** (terminal 1)
+**1. Get the code**
+
+```bash
+git clone git@github.com:uddiptagogoi2000/medin.git
+cd medin
+```
+
+**2. Start a database**: pick one
+
+```bash
+docker compose up -d     # Docker: starts Postgres with a "medin" and a "medin_test" database
+# or
+createdb medin           # Postgres installed on your machine
+```
+
+**3. Backend** (terminal 1)
 
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env            # then fill in DATABASE_URL and SECRET_KEY
-createdb medin                  # skip if you used docker compose
-alembic upgrade head            # creates the tables
-python -m scripts.seed          # demo doctors and posts; prints a login and an invite link
-uvicorn app.main:app --reload   # http://localhost:8000/docs shows every endpoint
+cp .env.example .env
 ```
 
-**2. Frontend** (terminal 2)
+Open `backend/.env` and set:
+
+| Setting        | Value                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Docker: keep `postgresql://postgres:postgres@localhost:5432/medin`<br>Postgres on a Mac (Homebrew): `postgresql://localhost:5432/medin`           |
+| `SECRET_KEY`   | Paste the output of `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Keep it secret; anyone who has it can log in as any user. |
+| `CLOUDINARY_*` | Optional. Leave empty and everything works except image uploads. For uploads, use the keys from a free [cloudinary.com](https://cloudinary.com) account. |
+
+Then:
+
+```bash
+alembic upgrade head            # creates the tables
+python -m scripts.seed          # demo doctors and posts; prints a login and an invite link
+uvicorn app.main:app --reload   # API on http://localhost:8000 (http://localhost:8000/docs lists every endpoint)
+```
+
+**4. Frontend** (terminal 2)
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local
+cp .env.example .env.local      # already points at http://localhost:8000; no edits needed
 npm run dev                     # http://localhost:3000
 ```
 
-Log in with **asha.rao@example.com / password123**, or open the invite link the seed script printed to create a new account.
+**5. Try it**
+
+Open http://localhost:3000 and log in as **asha.rao@example.com / password123** (every demo doctor uses `password123`). To try signing up, open the invite link the seed script printed. Signing up needs an invite: create more with `python -m scripts.create_invite`, or from inside the app (avatar menu → *Invite a colleague*).
+
+To start again with fresh demo data, empty the database (`dropdb medin && createdb medin`, or `docker compose down -v && docker compose up -d`), then run `alembic upgrade head` and `python -m scripts.seed` again.
 
 **Tests**
 
+The tests use a separate `medin_test` database (they wipe it between tests).
+
 ```bash
 cd backend
-createdb medin_test             # once (docker compose creates it for you)
-pytest                          # uses TEST_DATABASE_URL, default postgresql://localhost:5432/medin_test
+createdb medin_test             # skip with Docker; it's created for you
+pytest
+
+# With Docker, tell pytest the username and password:
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/medin_test pytest
 ```
 
 ## How it works
